@@ -248,7 +248,13 @@ function App() {
                                 <div className="idle-placeholder animate-fade-in">
                                     <div className="placeholder-icon">🔓</div>
                                     <p>Connection is currently inactive. Your traffic is not encrypted.</p>
-                                    <button className="goto-map-btn" onClick={() => setActiveTab('map')}>OPEN GLOBAL GRID</button>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: 'center' }}>
+                                        <button className="goto-map-btn" onClick={() => setActiveTab('map')}>OPEN GLOBAL GRID</button>
+                                        <label className="goto-map-btn" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'var(--success)', color: 'var(--success)' }}>
+                                            <input type="file" accept=".ovpn" onChange={handleFileUpload} style={{ display: 'none' }} />
+                                            <span>IMPORT .ovpn</span>
+                                        </label>
+                                    </div>
                                 </div>
                             )}
                         </div>
