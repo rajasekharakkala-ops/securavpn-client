@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import axios from 'axios'
+import logo from '../assets/logo.png'
 
 const Login = ({ onLoginSuccess, backendUrl }) => {
     const [username, setUsername] = useState('');
@@ -29,7 +30,8 @@ const Login = ({ onLoginSuccess, backendUrl }) => {
     return (
         <div style={{ width: '100%', maxWidth: '340px', padding: '2rem' }} className="animate-fade-in">
             <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: '900', letterSpacing: '4px', color: 'var(--primary)', marginBottom: '0.5rem' }}>AUTHORIZE ACCESS</h2>
+                <img src={logo} style={{ width: '64px', height: '64px', marginBottom: '1.5rem', filter: 'drop-shadow(0 0 10px rgba(14, 165, 233, 0.4))' }} alt="Nexus Shield" />
+                <h2 style={{ fontSize: '1.2rem', fontWeight: '900', letterSpacing: '4px', color: '#fff', marginBottom: '0.5rem' }}>AUTHORIZE ACCESS</h2>
                 <div style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '2px' }}>NEXUS COMMAND CREDENTIALS</div>
             </div>
 
@@ -101,6 +103,7 @@ const Login = ({ onLoginSuccess, backendUrl }) => {
                 }
                 .login-btn:hover {
                     box-shadow: 0 0 20px var(--primary-glow);
+                    transform: translateY(-1px);
                 }
             `}} />
         </div>

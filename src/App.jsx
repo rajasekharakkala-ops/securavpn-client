@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import Login from './components/Login'
 import axios from 'axios'
+import logo from './assets/logo.png'
 
 const BACKEND_URL = 'http://localhost:8000';
 
@@ -140,7 +141,7 @@ function App() {
         const reader = new FileReader();
         reader.onload = (event) => {
             setOvpnProfile(event.target.result);
-            setStatus('LOCAL PROFILE READY');
+            setStatus('OVPN CONFIG LOADED');
             setActiveTab('connection');
             setTimeout(() => setStatus(isConnected ? 'SECURED' : 'SYSTEM READY'), 3000);
         };
@@ -156,7 +157,7 @@ function App() {
             <div className="client-wrapper vertical-layout">
                 <header className="window-header">
                     <div className="logo-section">
-                        <div className="logo-diamond"></div>
+                        <img src={logo} style={{ width: '24px', height: '24px', marginRight: '10px' }} alt="Nexus" />
                         <span className="brand-text">SECURAVPN</span>
                     </div>
                     <div className="window-controls">
@@ -305,7 +306,7 @@ function App() {
                         <div className="profile-actions">
                             <label className="action-btn primary">
                                 <input type="file" accept=".ovpn" onChange={handleFileUpload} style={{ display: 'none' }} />
-                                <span>IMPORT OVPN CONFIG</span>
+                                <span>IMPORT .ovpn CONFIG</span>
                             </label>
                             <button className="action-btn secondary" onClick={fetchProfile}>
                                 ACCOUNT CLOUD SYNC
