@@ -1,7 +1,7 @@
 {
   "name": "securavpnclient",
-  "version": "1.0.3",
-  "description": "SecuraVPN Nexus Client - Premium Desktop Suite",
+  "version": "1.0.7",
+  "description": "Secura Future VPN - Premium Desktop Suite",
   "author": "SecuraVPN",
   "homepage": "https://securavpn.nexus",
   "main": "main.js",
@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "com.securavpn.nexus",
-    "productName": "SecuraVPN Nexus",
+    "productName": "Secura Future VPN",
     "directories": {
       "output": "dist_electron"
     },

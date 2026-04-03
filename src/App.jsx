@@ -12,15 +12,17 @@ function App() {
     const [loading, setLoading] = useState(false);
     const [ovpnProfile, setOvpnProfile] = useState(null);
     const [stats, setStats] = useState({ down: 0, up: 0, speedDown: 0, speedUp: 0 });
-    const [activeTab, setActiveTab] = useState('connection'); // connection, map, profiles
+    const [activeTab, setActiveTab] = useState('connection'); // connection, map, profiles, settings
+    const [settings, setSettings] = useState(null);
+    const [mfaChallenge, setMfaChallenge] = useState(null);
     const [selectedServer, setSelectedServer] = useState({ id: 'nexus-us', name: 'NEXUS UNITED STATES', lat: 35, lon: -100, city: 'Washington' });
 
     const serverNodes = [
-        { id: 'nexus-us', name: 'NEXUS UNITED STATES', lat: 35, lon: -100, city: 'Washington' },
-        { id: 'nexus-uk', name: 'NEXUS UNITED KINGDOM', lat: 51, lon: 0, city: 'London' },
-        { id: 'nexus-jp', name: 'NEXUS JAPAN', lat: 36, lon: 138, city: 'Tokyo' },
-        { id: 'nexus-de', name: 'NEXUS GERMANY', lat: 51, lon: 10, city: 'Frankfurt' },
-        { id: 'nexus-sg', name: 'NEXUS SINGAPORE', lat: 1, lon: 103, city: 'Singapore' },
+        { id: 'secura-us', name: 'SECURA UNITED STATES', lat: 35, lon: -100, city: 'Washington' },
+        { id: 'secura-uk', name: 'SECURA UNITED KINGDOM', lat: 51, lon: 0, city: 'London' },
+        { id: 'secura-jp', name: 'SECURA JAPAN', lat: 36, lon: 138, city: 'Tokyo' },
+        { id: 'secura-de', name: 'SECURA GERMANY', lat: 51, lon: 10, city: 'Frankfurt' },
+        { id: 'secura-sg', name: 'SECURA SINGAPORE', lat: 1, lon: 103, city: 'Singapore' },
     ];
 
     const mapToCoords = (lat, lon) => {
@@ -36,6 +38,8 @@ function App() {
             if (token) {
                 setIsAuthenticated(true);
             }
+            const s = await window.electron.getSettings();
+            setSettings(s);
         };
         initSession();
     }, []);
@@ -82,6 +86,12 @@ function App() {
                 setStats({ down: 0, up: 0, speedDown: 0, speedUp: 0 });
             }
         });
+
+        window.electron.onMfaRequired((data) => {
+            setMfaChallenge(data);
+            setLoading(false);
+            setStatus('MFA REQUIRED');
+        });
     }, []);
 
     const formatSpeed = (bytes) => {
@@ -89,6 +99,12 @@ function App() {
         if (bytes < 1024) return `${bytes.toFixed(1)} B/s`;
         if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB/s`;
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB/s`;
+    };
+
+    const updateSettings = async (newSettings) => {
+        const updated = { ...settings, ...newSettings };
+        setSettings(updated);
+        await window.electron.saveSettings(updated);
     };
 
     const handleConnect = async () => {
@@ -118,6 +134,17 @@ function App() {
             }
         }
         setLoading(false);
+    };
+
+    const handleMfaSubmit = async (otp) => {
+        setLoading(true);
+        setStatus('VERIFYING MFA...');
+        const res = await window.electron.submitMfa(otp);
+        if (res) {
+            setMfaChallenge(null);
+        } else {
+            setStatus('MFA FAILED');
+        }
     };
 
     const fetchProfile = async () => {
@@ -164,11 +191,22 @@ function App() {
                         <button className="control-btn btn-close" onClick={() => handleControl('close')}></button>
                     </div>
                 </header>
-                <main className="client-container login-mode">
+                <main className="client-container login-mode" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem' }}>
                     <Login
                         backendUrl={BACKEND_URL}
                         onLoginSuccess={() => setIsAuthenticated(true)}
                     />
+
+                    <div style={{ marginTop: '1.5rem', width: '100%', maxWidth: '340px' }}>
+                        <div style={{ fontSize: '9px', color: 'var(--text-muted)', marginBottom: '1rem', letterSpacing: '2px', textAlign: 'center' }}>OR PROCEED WITHOUT LOGIN</div>
+                        <label className="action-btn primary" style={{ width: '100%', display: 'flex', justifyContent: 'center', padding: '1rem', cursor: 'pointer', background: 'rgba(14, 165, 233, 0.1)', border: '1px dashed var(--primary)' }}>
+                            <input type="file" accept=".ovpn" onChange={(e) => {
+                                handleFileUpload(e);
+                                setIsAuthenticated(true);
+                            }} style={{ display: 'none' }} />
+                            <span>IMPORT LOCAL .ovpn</span>
+                        </label>
+                    </div>
                 </main>
             </div>
         )
@@ -186,12 +224,13 @@ function App() {
                         </svg>
                     </button>
                     <span className="window-title">
-                        {activeTab === 'profiles' ? 'Network Profiles' : (activeTab === 'map' ? 'Global Grid' : 'Nexus Tunnel Control')}
+                        {activeTab === 'profiles' ? 'Network Profiles' : (activeTab === 'map' ? 'Global Grid' : 'Secura Tunnel Control')}
                     </span>
                 </div>
                 <div className="tab-switcher">
                     <button className={`tab-link ${activeTab === 'connection' ? 'active' : ''}`} onClick={() => setActiveTab('connection')}>CONTROL</button>
                     <button className={`tab-link ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>MAP</button>
+                    <button className={`tab-link ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>SETTINGS</button>
                 </div>
                 <div className="window-controls">
                     <button className="control-btn btn-min" onClick={() => handleControl('minimize')}></button>
@@ -320,6 +359,97 @@ function App() {
                         </div>
                     </div>
                 )}
+
+                {activeTab === 'settings' && settings && (
+                    <div className="settings-view animate-fade-in">
+                        <div className="settings-section">
+                            <div className="section-title">VPN PROTOCOL</div>
+                            <div className="protocol-options">
+                                {['UDP', 'TCP', 'Adaptive'].map(p => (
+                                    <button
+                                        key={p}
+                                        className={`opt-btn ${settings.protocol === p ? 'active' : ''}`}
+                                        onClick={() => updateSettings({ protocol: p })}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="hint">UDP is faster for streaming; TCP is more stable on weak networks.</p>
+                        </div>
+
+                        <div className="settings-section">
+                            <div className="section-title">SECURITY & PRIVACY</div>
+                            <div className="toggle-list">
+                                <div className="toggle-row">
+                                    <div className="info">
+                                        <div className="label">Seamless Tunnel (Kill Switch)</div>
+                                        <div className="desc">Blocks internet if VPN disconnects unexpectedly.</div>
+                                    </div>
+                                    <div className={`mini-toggle ${settings.seamlessTunnel ? 'active' : ''}`} onClick={() => updateSettings({ seamlessTunnel: !settings.seamlessTunnel })}>
+                                        <div className="thumb"></div>
+                                    </div>
+                                </div>
+                                <div className="toggle-row">
+                                    <div className="info">
+                                        <div className="label">Enforce TLS 1.3</div>
+                                        <div className="desc">Requires the latest secure encryption standard.</div>
+                                    </div>
+                                    <div className={`mini-toggle ${settings.enforceTLS13 ? 'active' : ''}`} onClick={() => updateSettings({ enforceTLS13: !settings.enforceTLS13 })}>
+                                        <div className="thumb"></div>
+                                    </div>
+                                </div>
+                                <div className="toggle-row">
+                                    <div className="info">
+                                        <div className="label">Block IPv6 Leakage</div>
+                                        <div className="desc">Prevents data from bypassing the tunnel.</div>
+                                    </div>
+                                    <div className={`mini-toggle ${settings.blockIPv6 ? 'active' : ''}`} onClick={() => updateSettings({ blockIPv6: !settings.blockIPv6 })}>
+                                        <div className="thumb"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="settings-section">
+                            <div className="section-title">PLATFORM BEHAVIOR</div>
+                            <div className="toggle-list">
+                                <div className="toggle-row">
+                                    <div className="info">
+                                        <div className="label">Launch on Startup</div>
+                                        <div className="desc">Start SecuraVPN Nexus when Linux boots.</div>
+                                    </div>
+                                    <div className={`mini-toggle ${settings.launchAtStartup ? 'active' : ''}`} onClick={() => updateSettings({ launchAtStartup: !settings.launchAtStartup })}>
+                                        <div className="thumb"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {mfaChallenge && (
+                    <div className="mfa-overlay animate-fade-in">
+                        <div className="mfa-modal">
+                            <div className="mfa-icon">🛡️</div>
+                            <h3>IDENTITY VERIFICATION</h3>
+                            <p>Enter the 6-digit TOTP code from your authenticator app.</p>
+                            <input
+                                type="text"
+                                autoFocus
+                                placeholder="000 000"
+                                className="otp-input"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleMfaSubmit(e.target.value);
+                                }}
+                            />
+                            <div className="mfa-actions">
+                                <button className="action-btn primary" onClick={() => handleMfaSubmit(document.querySelector('.otp-input').value)}>VERIFY TUNNEL</button>
+                                <button className="action-btn secondary" onClick={() => setMfaChallenge(null)}>CANCEL</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
 
             <style dangerouslySetInnerHTML={{
@@ -354,6 +484,35 @@ function App() {
                 .confirm-node-btn { background: var(--primary); border: none; color: #fff; font-size: 9px; font-weight: 900; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer; }
 
                 .goto-map-btn { background: rgba(14, 165, 233, 0.1); border: 1px solid var(--primary); color: var(--primary); margin-top: 1.5rem; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 800; font-size: 9px; cursor: pointer; }
+
+                /* Settings View */
+                .settings-view { padding: 1.5rem; display: flex; flex-direction: column; gap: 2rem; overflow-y: auto; }
+                .settings-section { display: flex; flex-direction: column; gap: 1rem; }
+                .section-title { font-size: 8px; font-weight: 900; color: var(--primary); letter-spacing: 2px; }
+                .protocol-options { display: flex; gap: 0.5rem; }
+                .opt-btn { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: var(--text-muted); padding: 0.75rem; border-radius: 8px; font-size: 9px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+                .opt-btn.active { background: rgba(14, 165, 233, 0.2); border-color: var(--primary); color: #fff; box-shadow: 0 0 15px rgba(14, 165, 233, 0.2); }
+                .hint { font-size: 8px; color: var(--text-muted); opacity: 0.6; line-height: 1.4; }
+                
+                .toggle-list { display: flex; flex-direction: column; gap: 1rem; }
+                .toggle-row { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border: 1px solid var(--glass-border); }
+                .toggle-row .label { font-size: 10px; font-weight: 800; color: #fff; margin-bottom: 2px; }
+                .toggle-row .desc { font-size: 8px; color: var(--text-muted); }
+                
+                .mini-toggle { width: 32px; height: 18px; background: rgba(255,255,255,0.1); border-radius: 20px; position: relative; cursor: pointer; transition: all 0.3s; }
+                .mini-toggle.active { background: var(--success); }
+                .mini-toggle .thumb { width: 14px; height: 14px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: all 0.3s; }
+                .mini-toggle.active .thumb { transform: translateX(14px); }
+
+                /* MFA Challenge Overlay */
+                .mfa-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justifyContent: center; z-index: 1000; padding: 2rem; }
+                .mfa-modal { background: #0a0a0a; border: 1px solid var(--glass-border); border-radius: 24px; padding: 2.5rem; width: 100%; maxWidth: 360px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+                .mfa-icon { font-size: 48px; margin-bottom: 1.5rem; }
+                .mfa-modal h3 { font-size: 14px; font-weight: 900; letter-spacing: 2px; margin-bottom: 0.5rem; color: #fff; }
+                .mfa-modal p { font-size: 9px; color: var(--text-muted); margin-bottom: 2rem; line-height: 1.6; }
+                .otp-input { width: 100%; background: rgba(255,255,255,0.05); border: 2px solid var(--glass-border); border-radius: 12px; padding: 1rem; color: var(--primary); font-size: 24px; font-weight: 900; text-align: center; letter-spacing: 8px; margin-bottom: 2rem; }
+                .otp-input:focus { border-color: var(--primary); outline: none; background: rgba(14, 165, 233, 0.05); }
+                .mfa-actions { display: flex; flex-direction: column; gap: 0.75rem; }
 
                 .tunnel-card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px; padding: 1.5rem; }
                 .tunnel-header { display: flex; align-items: center; gap: 1rem; }

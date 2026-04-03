@@ -7,6 +7,32 @@ const { spawn, execSync } = require('child_process');
 const sudo = require('sudo-prompt');
 const isDev = process.env.NODE_ENV === 'development';
 
+// Persistent Settings Path
+const SETTINGS_PATH = path.join(app.getPath('userData'), 'secura-settings.json');
+const DEFAULT_SETTINGS = {
+    protocol: 'UDP',
+    securityLevel: 'Preferred',
+    enforceTLS13: true,
+    seamlessTunnel: false,
+    blockIPv6: true,
+    dnsFallback: true,
+    launchAtStartup: false,
+    restoreConnection: true
+};
+
+function loadSettings() {
+    try {
+        if (fs.existsSync(SETTINGS_PATH)) {
+            return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
+        }
+    } catch (e) { console.error('Settings load failed', e); }
+    return DEFAULT_SETTINGS;
+}
+
+function saveSettings(settings) {
+    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 4));
+}
+
 // Force software rendering for maximum compatibility on older Linux systems
 app.disableHardwareAcceleration();
 
@@ -106,11 +132,20 @@ ipcMain.handle('vpn-connect', async (event, profileContent) => {
         currentProfilePath = path.join(os.tmpdir(), `nexus-${Date.now()}.ovpn`);
         fs.writeFileSync(currentProfilePath, profileContent);
 
+        const settings = loadSettings();
         let openvpnPath = 'openvpn';
         if (process.platform === 'win32') openvpnPath = '"C:\\Program Files\\OpenVPN\\bin\\openvpn.exe"';
 
-        const options = { name: 'SecuraVPN Nexus' };
-        const command = `${openvpnPath} --config "${currentProfilePath}" --management 127.0.0.1 7505`;
+        const options = { name: 'Secura Future VPN' };
+        let command = `${openvpnPath} --config "${currentProfilePath}" --management 127.0.0.1 7505`;
+
+        // Apply Protocol settings
+        if (settings.protocol === 'TCP') command += ' --proto tcp-client';
+        else if (settings.protocol === 'UDP') command += ' --proto udp';
+
+        // Apply Security Hardening
+        if (settings.enforceTLS13) command += ' --tls-version-min 1.3';
+        if (settings.blockIPv6) command += ' --block-ipv6';
 
         return new Promise((resolve) => {
             sudo.exec(command, options, (error) => {
@@ -130,11 +165,17 @@ ipcMain.handle('vpn-connect', async (event, profileContent) => {
 
                 client.on('data', (data) => {
                     const status = data.toString();
+
+                    // Handle MFA / Password Challenges
+                    if (status.includes('>PASSWORD:Need')) {
+                        event.sender.send('vpn-mfa-required', { type: 'otp' });
+                    }
+
                     if (status.includes('CONNECTED,SUCCESS')) {
                         clearInterval(checkConnection);
                         vpnProcess = true;
                         if (!isSuspended) startPersistentStats(event.sender);
-                        showNotification('Nexus Secured', 'Encrypted tunnel successfully established.');
+                        showNotification('Secura Secured', 'Encrypted tunnel successfully established.');
                         resolve({ success: true });
                         client.end();
                     }
@@ -158,7 +199,7 @@ ipcMain.handle('vpn-connect', async (event, profileContent) => {
 
 ipcMain.handle('vpn-disconnect', async () => {
     cleanupVpn();
-    showNotification('Nexus Offline', 'Encrypted tunnel has been terminated.');
+    showNotification('Secura Offline', 'Encrypted tunnel has been terminated.');
     return { success: true };
 });
 
@@ -245,11 +286,25 @@ function createTray() {
             }
         }
     ]);
-    tray.setToolTip('SecuraVPN Nexus');
+    tray.setToolTip('Secura Future VPN');
     tray.setContextMenu(contextMenu);
     tray.on('double-click', () => mainWindow.show());
 }
 
 ipcMain.handle('vpn-status', async () => {
     return { connected: !!vpnProcess };
+});
+
+ipcMain.handle('vpn-submit-mfa', async (event, otp) => {
+    if (statsSocket && statsSocket.writable) {
+        statsSocket.write(`password "MFA Challenge" ${otp}\n`);
+        return true;
+    }
+    return false;
+});
+
+ipcMain.handle('get-settings', async () => loadSettings());
+ipcMain.handle('save-settings', async (event, settings) => {
+    saveSettings(settings);
+    return true;
 });
